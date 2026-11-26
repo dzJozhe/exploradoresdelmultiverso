@@ -1,48 +1,53 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rickandmorty/core/providers.dart';
 import 'package:rickandmorty/features/characters/data/models/character.dart';
+import 'package:rickandmorty/features/characters/data/models/character_detail.dart';
 import 'package:rickandmorty/features/characters/data/models/episode.dart';
 import 'package:rickandmorty/features/characters/data/models/location.dart';
 import 'package:rickandmorty/features/characters/data/services/characters_api.dart';
 
 class CharacterDetailState {
-  final Character? character;
-  final Location? origin; // null si es "unknown"
-  final Location? lastLocation;
-  final List<Episode> episodes;
+  final CharacterDetail? detail;
   // episodeId -> otros personajes del episodio
   final Map<int, List<Character>> episodeCharacters;
   final Set<int> loadingEpisodes;
   final bool isLoading;
   final String? error;
   final bool isConnectionError;
+  // true: datos leídos de SQLite porque la API no respondió.
+  final bool isFromCache;
+  // false: del favorito solo se guardó el personaje, sin ubicaciones ni episodios.
+  final bool isCacheComplete;
 
   const CharacterDetailState({
-    this.character,
-    this.origin,
-    this.lastLocation,
-    this.episodes = const [],
+    this.detail,
     this.episodeCharacters = const {},
     this.loadingEpisodes = const {},
     this.isLoading = false,
     this.error,
     this.isConnectionError = false,
+    this.isFromCache = false,
+    this.isCacheComplete = true,
   });
+
+  Character? get character => detail?.character;
+  Location? get origin => detail?.origin;
+  Location? get lastLocation => detail?.lastLocation;
+  List<Episode> get episodes => detail?.episodes ?? const [];
 
   CharacterDetailState copyWith({
     Map<int, List<Character>>? episodeCharacters,
     Set<int>? loadingEpisodes,
   }) {
     return CharacterDetailState(
-      character: character,
-      origin: origin,
-      lastLocation: lastLocation,
-      episodes: episodes,
+      detail: detail,
       episodeCharacters: episodeCharacters ?? this.episodeCharacters,
       loadingEpisodes: loadingEpisodes ?? this.loadingEpisodes,
       isLoading: isLoading,
       error: error,
       isConnectionError: isConnectionError,
+      isFromCache: isFromCache,
+      isCacheComplete: isCacheComplete,
     );
   }
 }
@@ -60,51 +65,44 @@ class CharacterDetailViewModel extends Notifier<CharacterDetailState> {
 
   Future<void> loadCharacter() async {
     state = const CharacterDetailState(isLoading: true);
-    final repository = ref.read(charactersRepositoryProvider);
+    final network = ref.read(networkStatusProvider.notifier);
 
     try {
-      final character = await repository.getCharacter(characterId);
-
-      final episodeIds = character.episodes
-          .map(idFromUrl)
-          .whereType<int>()
-          .toList();
-      final (origin, lastLocation, episodes) = await (
-        repository.getLocationByUrl(character.origin.url),
-        repository.getLocationByUrl(character.location.url),
-        repository.getEpisodes(episodeIds),
-      ).wait;
-
+      final detail = await ref
+          .read(charactersRepositoryProvider)
+          .getCharacterDetail(characterId);
+      network.markOnline();
       if (!ref.mounted) return;
 
-      state = CharacterDetailState(
-        character: character,
-        origin: origin,
-        lastLocation: lastLocation,
-        episodes: episodes,
-      );
+      state = CharacterDetailState(detail: detail);
+      // Si es favorito, se actualiza lo guardado para consultarlo sin conexión.
+      await ref.read(savedViewModelProvider.notifier).saveDetail(detail);
 
-      if (episodes.isNotEmpty) loadEpisodeCharacters(episodes.first);
+      if (!ref.mounted) return;
+      if (detail.episodes.isNotEmpty) {
+        loadEpisodeCharacters(detail.episodes.first);
+      }
     } on CharactersApiException catch (e) {
+      if (e.isConnectionError) network.markOffline();
+      final phone = ref.read(authViewModelProvider);
+      final cached = phone == null
+          ? null
+          : await ref
+                .read(savedRepositoryProvider)
+                .getDetail(phone, characterId);
       if (!ref.mounted) return;
-      state = CharacterDetailState(
-        error: e.message,
-        isConnectionError: e.isConnectionError,
-      );
-    } on ParallelWaitError<dynamic, dynamic> catch (e) {
-      if (!ref.mounted) return;
-      final apiError = [
-        e.errors.$1,
-        e.errors.$2,
-        e.errors.$3,
-      ].whereType<AsyncError>().map((err) => err.error).firstOrNull;
-      state = CharacterDetailState(
-        error: apiError is CharactersApiException
-            ? apiError.message
-            : 'No pudimos cargar el personaje',
-        isConnectionError:
-            apiError is CharactersApiException && apiError.isConnectionError,
-      );
+
+      state = cached != null
+          ? CharacterDetailState(
+              detail: cached.detail,
+              isConnectionError: e.isConnectionError,
+              isFromCache: true,
+              isCacheComplete: cached.isComplete,
+            )
+          : CharacterDetailState(
+              error: e.message,
+              isConnectionError: e.isConnectionError,
+            );
     }
   }
 

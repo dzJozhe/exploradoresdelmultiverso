@@ -93,6 +93,10 @@ class _CharacterDetailViewState extends ConsumerState<CharacterDetailView> {
     return ListView(
       padding: const EdgeInsets.only(top: 16, bottom: 32),
       children: [
+        if (state.isFromCache) ...[
+          _offlineBanner(state.isCacheComplete),
+          const SizedBox(height: 20),
+        ],
         _header(character),
         const SizedBox(height: 28),
         _sectionTitle('Ubicaciones'),
@@ -122,16 +126,70 @@ class _CharacterDetailViewState extends ConsumerState<CharacterDetailView> {
         const SizedBox(height: 28),
         _sectionTitle('Episodios en los que aparece'),
         const SizedBox(height: 14),
+        if (state.episodes.isEmpty && state.isFromCache)
+          const Text(
+            'Los episodios de este personaje no se guardaron. '
+            'Se descargarán cuando vuelvas a tener conexión.',
+            style: TextStyle(color: _muted),
+          ),
         for (int i = 0; i < state.episodes.length; i++)
           _episodeTile(i, state.episodes[i], state, viewModel),
       ],
     );
   }
 
+  Widget _offlineBanner(bool isComplete) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2B2414),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF6B5A1F)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.wifi_off, color: Color(0xFFF2C14E), size: 22),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Sin conexión',
+                  style: TextStyle(
+                    color: Color(0xFFF5D27A),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  isComplete
+                      ? 'Mostrando los datos que guardaste en este dispositivo.'
+                      : 'Solo se guardaron los datos básicos de este personaje.',
+                  style: const TextStyle(
+                    color: Color(0xFFE8DDBF),
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _topBar(int? id) {
-    final character = id == null
+    final state = id == null
         ? null
-        : ref.watch(characterDetailViewModelProvider(id)).character;
+        : ref.watch(characterDetailViewModelProvider(id));
+    final character = state?.character;
+    // Lo leído de SQLite sin ubicaciones ni episodios no se vuelve a guardar.
+    final detailToSave = state == null || !state.isCacheComplete
+        ? null
+        : state.detail;
     final isFavorite =
         character != null &&
         (ref.watch(savedViewModelProvider).value ?? const []).any(
@@ -151,7 +209,7 @@ class _CharacterDetailViewState extends ConsumerState<CharacterDetailView> {
               ? null
               : () => ref
                     .read(savedViewModelProvider.notifier)
-                    .toggleFavorite(character),
+                    .toggleFavorite(character, detail: detailToSave),
           tooltip: isFavorite ? 'Quitar de guardados' : 'Guardar',
           icon: Icon(
             isFavorite ? Icons.favorite : Icons.favorite_border,

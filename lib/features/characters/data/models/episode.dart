@@ -22,4 +22,12 @@ class Episode {
       characters: (json['characters'] as List<dynamic>? ?? []).cast<String>(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'air_date': airDate,
+    'episode': code,
+    'characters': characters,
+  };
 }

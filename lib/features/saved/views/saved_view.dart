@@ -7,16 +7,14 @@ import 'package:rickandmorty/core/widgets/character_avatar.dart';
 import 'package:rickandmorty/core/widgets/session_header.dart';
 
 class SavedView extends ConsumerWidget {
-  /// Muestra el aviso "Sin conexión".
-  final bool isOffline;
-
-  const SavedView({super.key, this.isOffline = false});
+  const SavedView({super.key});
 
   static const _accent = Color(0xFFA8E05F);
   static const _muted = Color(0xFFB4BCC8);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final isOffline = ref.watch(networkStatusProvider);
     final savedAsync = ref.watch(savedViewModelProvider);
     final saved = savedAsync.value ?? const [];
 

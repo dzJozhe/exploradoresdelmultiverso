@@ -11,6 +11,17 @@ class CharactersView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Sin conexión al abrir la app: si hay guardados, se abre Guardados.
+    ref.listen(charactersViewModelProvider, (previous, next) async {
+      final failedOffline =
+          next.isConnectionError && next.characters.isEmpty && !next.isLoading;
+      if (!failedOffline || next.query.isNotEmpty) return;
+      final favorites = await ref.read(savedViewModelProvider.future);
+      if (favorites.isEmpty || !context.mounted) return;
+      final viewModel = ref.read(charactersViewModelProvider.notifier);
+      if (viewModel.consumeOfflineRedirect()) context.go('/saved');
+    });
+
     return Scaffold(
       bottomNavigationBar: AppBottomNavBar(
         currentIndex: 0,
@@ -69,6 +80,9 @@ class CharactersView extends ConsumerWidget {
                   'guardados, que funcionan sin conexión.'
             : state.error!,
         onRetry: viewModel.loadCharacters,
+        onGoToSaved: state.isConnectionError
+            ? () => context.go('/saved')
+            : null,
       );
     }
 
@@ -200,6 +214,7 @@ class CharactersView extends ConsumerWidget {
     required String title,
     required String message,
     required VoidCallback onRetry,
+    VoidCallback? onGoToSaved,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -232,6 +247,17 @@ class CharactersView extends ConsumerWidget {
             onPressed: onRetry,
             child: const Text('Reintentar'),
           ),
+          if (onGoToSaved != null) ...[
+            const SizedBox(height: 8),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Color(0xFF29313C)),
+              ),
+              onPressed: onGoToSaved,
+              child: const Text('Ir a guardados'),
+            ),
+          ],
         ],
       ),
     );

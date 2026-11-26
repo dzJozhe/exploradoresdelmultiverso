@@ -52,12 +52,20 @@ class CharactersViewModel extends Notifier<CharactersState> {
   Timer? _debounce;
   // Permite descartar respuestas de búsquedas anteriores.
   int _requestId = 0;
+  bool _offlineRedirectDone = false;
 
   @override
   CharactersState build() {
     ref.onDispose(() => _debounce?.cancel());
     Future.microtask(loadCharacters);
     return const CharactersState(isLoading: true);
+  }
+
+  // Solo la primera vez que falla la conexión se abre Guardados automáticamente.
+  bool consumeOfflineRedirect() {
+    if (_offlineRedirectDone) return false;
+    _offlineRedirectDone = true;
+    return true;
   }
 
   void search(String text) {
@@ -86,6 +94,7 @@ class CharactersViewModel extends Notifier<CharactersState> {
           .read(charactersRepositoryProvider)
           .getCharacters(page: 1, name: q);
       if (requestId != _requestId) return;
+      ref.read(networkStatusProvider.notifier).markOnline();
       state = CharactersState(
         characters: result.characters,
         query: q,
@@ -94,6 +103,9 @@ class CharactersViewModel extends Notifier<CharactersState> {
       );
     } on CharactersApiException catch (e) {
       if (requestId != _requestId) return;
+      if (e.isConnectionError) {
+        ref.read(networkStatusProvider.notifier).markOffline();
+      }
       state = CharactersState(
         query: q,
         error: e.message,
@@ -113,6 +125,7 @@ class CharactersViewModel extends Notifier<CharactersState> {
           .read(charactersRepositoryProvider)
           .getCharacters(page: nextPage, name: state.query);
       if (requestId != _requestId) return;
+      ref.read(networkStatusProvider.notifier).markOnline();
       state = state.copyWith(
         characters: [...state.characters, ...result.characters],
         hasMore: result.hasNext,
@@ -121,6 +134,9 @@ class CharactersViewModel extends Notifier<CharactersState> {
       );
     } on CharactersApiException catch (e) {
       if (requestId != _requestId) return;
+      if (e.isConnectionError) {
+        ref.read(networkStatusProvider.notifier).markOffline();
+      }
       state = state.copyWith(
         isLoadingMore: false,
         error: e.message,

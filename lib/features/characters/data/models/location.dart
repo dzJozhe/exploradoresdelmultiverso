@@ -22,6 +22,14 @@ class Location {
       residents: (json['residents'] as List<dynamic>? ?? []).cast<String>(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'type': type,
+    'dimension': dimension,
+    'residents': residents,
+  };
 }
 
 // Id al final de una URL de la API; null si la URL está vacía.

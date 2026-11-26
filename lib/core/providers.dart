@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:rickandmorty/core/network/network_status.dart';
 import 'package:rickandmorty/features/auth/data/repositories/auth_repositorie.dart';
 import 'package:rickandmorty/features/auth/data/services/auth_storage.dart';
 import 'package:rickandmorty/features/auth/ui/view_models/auth_view_model.dart';
@@ -77,3 +78,8 @@ final savedRepositoryProvider = Provider<SavedRepositorie>((ref) {
 //PROVIDER DEL VIEW MODEL DE GUARDADOS
 final savedViewModelProvider =
     AsyncNotifierProvider<SavedViewModel, List<Character>>(SavedViewModel.new);
+
+//PROVIDER DEL ESTADO DE CONEXIÓN
+final networkStatusProvider = NotifierProvider<NetworkStatus, bool>(
+  NetworkStatus.new,
+);

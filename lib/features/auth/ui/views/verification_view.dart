@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rickandmorty/core/providers.dart';
@@ -22,6 +23,8 @@ class _VerificationViewState extends ConsumerState<VerificationView> {
   final codeNumber6 = TextEditingController();
 
   final textControllerCode = TextEditingController();
+  String? _codeError;
+  bool _codeResent = false;
 
   List<TextEditingController> listControllers = [];
 
@@ -74,9 +77,28 @@ class _VerificationViewState extends ConsumerState<VerificationView> {
 
     widget.verificationCode = newCode['code'];
     viewCode(newCode['code']);
+
+    textControllerCode.clear();
+    if (!mounted) return;
+    setState(() {
+      _codeError = null;
+      _codeResent = true;
+    });
+  }
+
+  String? _validateCode(String code) {
+    if (code.isEmpty) return 'Escribe el código de 6 dígitos.';
+    if (code.length != 6) return 'El código debe tener 6 dígitos.';
+    return null;
   }
 
   Future<void> _verificationCode() async {
+    final formatError = _validateCode(textControllerCode.text.trim());
+    if (formatError != null) {
+      setState(() => _codeError = formatError);
+      return;
+    }
+
     final isValidCode = await ref
         .read(authViewModelProvider.notifier)
         .verifyCode(
@@ -91,8 +113,14 @@ class _VerificationViewState extends ConsumerState<VerificationView> {
     print(isValidCode);
     // }
 
-    if (isValidCode && mounted) {
+    if (!mounted) return;
+    if (isValidCode) {
       context.go('/characters');
+    } else {
+      setState(
+        () =>
+            _codeError = 'El código no es correcto. Revísalo o pide uno nuevo.',
+      );
     }
   }
 
@@ -327,8 +355,29 @@ class _VerificationViewState extends ConsumerState<VerificationView> {
                 controller: textControllerCode,
                 focusNode: FocusNode(),
                 keyboardType: TextInputType.number,
+                maxLength: 6,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                onChanged: (_) {
+                  if (_codeError != null) setState(() => _codeError = null);
+                },
+                onFieldSubmitted: (_) => _verificationCode(),
                 style: const TextStyle(color: Colors.white, fontSize: 16),
                 decoration: InputDecoration(
+                  counterText: '',
+                  errorText: _codeError,
+                  helperText: _codeResent
+                      ? 'Te enviamos un código nuevo.'
+                      : null,
+                  helperStyle: const TextStyle(color: Colors.lightGreen),
+                  errorStyle: const TextStyle(color: Color(0xFFFF8A80)),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10.0),
+                    borderSide: const BorderSide(color: Color(0xFFFF8A80)),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10.0),
+                    borderSide: const BorderSide(color: Color(0xFFFF8A80)),
+                  ),
                   fillColor: Color.fromARGB(103, 6, 6, 6),
                   filled: true,
                   border: OutlineInputBorder(
